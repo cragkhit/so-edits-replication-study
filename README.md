@@ -1,6 +1,6 @@
 # SO Edits Replication Study (Python)
 
-Scripts and pipeline for a Python replication study using Matcha (the
+Scripts and pipeline for a Python replication study using Siamese+ (i.e., Matcha -- the
 Siamese-based code clone search tool), covering: finding and cloning Python
 GitHub repos, indexing a large Python snippet corpus, and searching each
 cloned repo's code against that index.
