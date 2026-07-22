@@ -1,0 +1,11 @@
+1_matcha/
+python_files/
+python_files.zip
+python_repos/
+python_repos_100/
+elasticsearch-2.2.0/
+__MACOSX/
+__pycache__/
+*.pyc
+*.log
+.DS_Store
