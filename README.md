@@ -155,6 +155,17 @@ Note: some result files may be legitimately empty — that means no code in
 the index cleared the similarity threshold for that repo's methods, not a
 bug.
 
+## Run log
+
+Actual timing from running this pipeline end-to-end:
+
+| Run | Started | Ended | Duration |
+|---|---|---|---|
+| Indexing (2,915,926 files → 387,020 methods) | — | — | ~5h8m (across restarts; see "Known issues" above) |
+| Searching 100 cloned repos against the index | 2026-07-23 04:42:11 | 2026-07-23 17:49:59 | ~12h14m active search time (~13h8m wall-clock span). The run was killed unexpectedly partway through (after 47 repos) and resumed via `search_all_repos.sh`'s skip-if-already-processed logic, so the total spans two segments (5h23m + 6h51m) with a ~54min gap in between. |
+
+Final search results: **100/100 repos processed, 63 with at least one match above the similarity threshold, 37 with none** (legitimate no-match results, not errors).
+
 ### Watch progress
 
 `watch_index_progress.sh` — tails an indexing/search log, filtered to just
