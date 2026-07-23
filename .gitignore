@@ -3,6 +3,7 @@ python_files/
 python_files.zip
 python_repos/
 python_repos_100/
+*.zip
 elasticsearch-2.2.0/
 __MACOSX/
 __pycache__/

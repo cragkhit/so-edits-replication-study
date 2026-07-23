@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Find Python GitHub repositories matching:
-  1) at least N stars (default 10)
-  2) not a fork
+Find GitHub repositories in a given language matching:
+  1) at least N stars (default 10), optionally bounded by --max-stars
+  2) not a fork itself, with optional --min-forks/--max-forks on its own fork count
   3) has at least one open issue
   4) has at least one open (active) pull request
 
@@ -10,7 +10,8 @@ Prints matching repos' GitHub URLs. Uses only the standard library.
 
 Usage:
   export GITHUB_TOKEN=ghp_xxx   # recommended, raises rate limits a lot
-  python3 find_python_repos.py --limit 50 --min-stars 10 --output repos.txt
+  python3 find_repos.py --language Python --limit 50 --min-stars 10 --output repos.txt
+  python3 find_repos.py --language TypeScript --limit 50 --min-stars 10 --output repos_ts.txt
 """
 
 import argparse
@@ -29,7 +30,7 @@ def api_get(url: str, token: str | None) -> dict:
     headers = {
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "find_python_repos-script",
+        "User-Agent": "find_repos-script",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -51,12 +52,21 @@ def api_get(url: str, token: str | None) -> dict:
             raise RuntimeError(f"GitHub API error {e.code} for {url}: {body}") from e
 
 
-def search_repositories(min_stars: int, max_stars: int | None, token: str | None, sleep_between: float):
-    """Yields candidate repo dicts: Python, not a fork, stars in [min_stars, max_stars]."""
+def search_repositories(language: str, min_stars: int, max_stars: int | None,
+                         min_forks: int | None, max_forks: int | None,
+                         token: str | None, sleep_between: float):
+    """Yields candidate repo dicts: given language, not a fork, stars/forks in the given bounds."""
+    query = f"language:{language} fork:false"
     if max_stars is not None:
-        query = f"language:Python stars:{min_stars}..{max_stars} fork:false"
+        query += f" stars:{min_stars}..{max_stars}"
     else:
-        query = f"language:Python stars:>={min_stars} fork:false"
+        query += f" stars:>={min_stars}"
+    if min_forks is not None and max_forks is not None:
+        query += f" forks:{min_forks}..{max_forks}"
+    elif max_forks is not None:
+        query += f" forks:<={max_forks}"
+    elif min_forks is not None:
+        query += f" forks:>={min_forks}"
     for page in range(1, 11):  # Search API caps at 1000 results (10 pages x 100)
         params = {
             "q": query,
@@ -85,9 +95,17 @@ def count_matching(full_name: str, issue_type: str, token: str) -> int:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--language", type=str, required=True,
+                         help="GitHub language name to search for, e.g. Python, TypeScript, JavaScript")
     parser.add_argument("--min-stars", type=int, default=10)
     parser.add_argument("--max-stars", type=int, default=None,
                          help="upper star bound, for paging past the Search API's 1000-result cap")
+    parser.add_argument("--min-forks", type=int, default=None, help="minimum fork count")
+    parser.add_argument("--max-forks", type=int, default=None, help="maximum fork count")
+    parser.add_argument("--min-watchers", type=int, default=None,
+                         help="minimum watcher count. Note: GitHub's API reports watchers_count as "
+                              "identical to stargazers_count (starring/watching were unified in 2012), "
+                              "so this is redundant with --min-stars in practice.")
     parser.add_argument("--limit", type=int, default=50, help="number of NEW matching repos to find")
     parser.add_argument("--min-open-issues", type=int, default=1)
     parser.add_argument("--min-open-prs", type=int, default=1)
@@ -116,13 +134,18 @@ def main():
 
     matches = []
     checked = 0
-    for repo in search_repositories(args.min_stars, args.max_stars, args.token, args.sleep):
+    for repo in search_repositories(args.language, args.min_stars, args.max_stars,
+                                     args.min_forks, args.max_forks,
+                                     args.token, args.sleep):
         if len(matches) >= args.limit:
             break
         if repo["html_url"] in existing_urls:
             continue
         checked += 1
         full_name = repo["full_name"]
+
+        if args.min_watchers is not None and repo["watchers_count"] < args.min_watchers:
+            continue
 
         open_issues = count_matching(full_name, "issue", args.token)
         time.sleep(args.sleep)
@@ -136,7 +159,8 @@ def main():
 
         matches.append(repo["html_url"])
         print(f"[{len(matches)}/{args.limit}] {repo['html_url']} "
-              f"(stars={repo['stargazers_count']}, open_issues={open_issues}, open_prs={open_prs})",
+              f"(stars={repo['stargazers_count']}, forks={repo['forks_count']}, "
+              f"open_issues={open_issues}, open_prs={open_prs})",
               file=sys.stderr)
 
     print(f"\nChecked {checked} candidate repos, found {len(matches)} matching all 4 criteria.",
